@@ -590,7 +590,7 @@ func (d *Decoder) decodeString(name string, data interface{}, val reflect.Value)
 		case reflect.Uint8:
 			var uints []uint8
 			if dataKind == reflect.Array {
-				uints = make([]uint8, dataVal.Len(), dataVal.Len())
+				uints = make([]uint8, dataVal.Len())
 				for i := range uints {
 					uints[i] = dataVal.Index(i).Interface().(uint8)
 				}
@@ -940,12 +940,12 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 				continue
 			}
 			// If "omitempty" is specified in the tag, it ignores empty values.
-			if strings.Index(tagValue[index+1:], "omitempty") != -1 && isEmptyValue(v) {
+			if strings.Contains(tagValue[index+1:], "omitempty") {
 				continue
 			}
 
 			// If "squash" is specified in the tag, we squash the field down.
-			squash = squash || strings.Index(tagValue[index+1:], "squash") != -1
+			squash = squash || strings.Contains(tagValue[index+1:], "squash")
 			if squash {
 				// When squashing, the embedded type can be a pointer to a struct.
 				if v.Kind() == reflect.Ptr && v.Elem().Kind() == reflect.Struct {
@@ -1126,7 +1126,12 @@ func (d *Decoder) decodeSlice(name string, data interface{}, val reflect.Value) 
 	} else if valSlice.Len() > dataVal.Len() {
 		valSlice = valSlice.Slice(0, dataVal.Len())
 	}
-
+	if bytesData, ok := data.([]byte); ok {
+		if valElemType.Kind() == reflect.Uint8 {
+			val.Set(reflect.Indirect(reflect.ValueOf(bytesData)))
+			return nil
+		}
+	}
 	// Accumulate any errors
 	errors := make([]string, 0)
 
@@ -1481,24 +1486,6 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 	}
 
 	return nil
-}
-
-func isEmptyValue(v reflect.Value) bool {
-	switch getKind(v) {
-	case reflect.Array, reflect.Map, reflect.Slice, reflect.String:
-		return v.Len() == 0
-	case reflect.Bool:
-		return !v.Bool()
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return v.Int() == 0
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		return v.Uint() == 0
-	case reflect.Float32, reflect.Float64:
-		return v.Float() == 0
-	case reflect.Interface, reflect.Ptr:
-		return v.IsNil()
-	}
-	return false
 }
 
 func getKind(val reflect.Value) reflect.Kind {
